@@ -42,7 +42,7 @@ impl openaction::GlobalEventHandler for GlobalEventHandler {
             .await
             .insert("_watcher_task".to_string(), token);
 
-        log::info!("Plugin initialized");
+        log::info!("Plugin inicializado");
 
         Ok(())
     }
@@ -52,11 +52,11 @@ impl openaction::GlobalEventHandler for GlobalEventHandler {
         event: SetImageEvent,
         _outbound: &mut OutboundEventManager,
     ) -> EventHandlerResult {
-        log::debug!("Asked to set image: {:#?}", event);
+        log::debug!("Peticion de imagen: {:#?}", event);
 
         // Skip knobs images
         if event.controller == Some("Encoder".to_string()) {
-            log::debug!("Looks like a knob, no need to set image");
+            log::debug!("Parece un mando giratorio, no hay que pintar imagen");
             return Ok(());
         }
 
@@ -68,7 +68,10 @@ impl openaction::GlobalEventHandler for GlobalEventHandler {
                 .map_err(async |err| handle_error(&id, err).await)
                 .ok();
         } else {
-            log::error!("Received event for unknown device: {}", event.device);
+            log::error!(
+                "Evento recibido de un dispositivo desconocido: {}",
+                event.device
+            );
         }
 
         Ok(())
@@ -79,7 +82,7 @@ impl openaction::GlobalEventHandler for GlobalEventHandler {
         event: SetBrightnessEvent,
         _outbound: &mut OutboundEventManager,
     ) -> EventHandlerResult {
-        log::debug!("Asked to set brightness: {:#?}", event);
+        log::debug!("Peticion de brillo: {:#?}", event);
 
         let id = event.device.clone();
 
@@ -90,7 +93,10 @@ impl openaction::GlobalEventHandler for GlobalEventHandler {
                 .map_err(async |err| handle_error(&id, err).await)
                 .ok();
         } else {
-            log::error!("Received event for unknown device: {}", event.device);
+            log::error!(
+                "Evento recibido de un dispositivo desconocido: {}",
+                event.device
+            );
         }
 
         Ok(())
@@ -101,7 +107,7 @@ impl openaction::GlobalEventHandler for GlobalEventHandler {
         _event: SystemDidWakeUpEvent,
         outbound: &mut OutboundEventManager,
     ) -> EventHandlerResult {
-        log::info!("The system is woke now, resetting devices");
+        log::info!("El sistema ha despertado, reiniciando los dispositivos");
 
         let devices = DEVICES.write().await;
 
@@ -120,14 +126,14 @@ impl openaction::ActionEventHandler for ActionEventHandler {}
 async fn shutdown() {
     let tokens = TOKENS.write().await;
 
-    for (_, token) in tokens.iter() {
+    for token in tokens.values() {
         token.cancel();
     }
 }
 
 async fn connect() {
     if let Err(error) = init_plugin(GlobalEventHandler {}, ActionEventHandler {}).await {
-        log::error!("Failed to initialize plugin: {}", error);
+        log::error!("No se pudo inicializar el plugin: {}", error);
 
         exit(1);
     }
@@ -166,18 +172,18 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         _ = sigterm() => {},
     }
 
-    log::info!("Shutting down");
+    log::info!("Apagando");
 
     shutdown().await;
 
     let tracker = TRACKER.lock().await.clone();
 
-    log::info!("Waiting for tasks to finish");
+    log::info!("Esperando a que terminen las tareas");
 
     tracker.close();
     tracker.wait().await;
 
-    log::info!("Tasks are finished, exiting now");
+    log::info!("Tareas terminadas, saliendo");
 
     Ok(())
 }

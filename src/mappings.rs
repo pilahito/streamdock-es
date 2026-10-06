@@ -7,12 +7,30 @@ use mirajazz::{
 // Must be unique between all the plugins, 2 characters long and match `DeviceNamespace` field in `manifest.json`
 pub const DEVICE_NAMESPACE: &str = "99";
 
+/// Filas de teclas. Igual en todos los modelos soportados.
 pub const ROW_COUNT: usize = 3;
-pub const COL_COUNT: usize = 6;
-pub const KEY_COUNT: usize = ROW_COUNT * COL_COUNT;
+
+/// Columnas maximas del firmware. Solo los modelos v2/v3 llevan una 6ª columna.
+pub const MAX_COL_COUNT: usize = 6;
+
+/// Ranuras maximas que el firmware sabe direccionar (3x6 = 18).
+///
+/// OJO: esto NO es el numero de teclas de todos los aparatos. Para eso usa
+/// [`Kind::key_count`].
+pub const MAX_KEY_COUNT: usize = ROW_COUNT * MAX_COL_COUNT;
+
 pub const ENCODER_COUNT: usize = 0;
 
-#[allow(non_camel_case_types)]
+/// Traduccion indice de OpenDeck -> tecla del firmware para aparatos de 15
+/// teclas (3x5). Es la tabla de 18 quitandole las tres ranuras muertas de la 6ª
+/// columna, que es justo lo que sobraba en los modelos v1.
+pub const KEY_MAP_15: [u8; 15] = [12, 9, 6, 3, 0, 13, 10, 7, 4, 1, 14, 11, 8, 5, 2];
+
+/// Traduccion indice de OpenDeck -> tecla del firmware para aparatos de 18
+/// ranuras (3x6).
+pub const KEY_MAP_18: [u8; 18] = [12, 9, 6, 3, 0, 15, 13, 10, 7, 4, 1, 16, 14, 11, 8, 5, 2, 17];
+
+#[allow(non_camel_case_types, clippy::upper_case_acronyms)]
 #[derive(Debug, Clone)]
 pub enum Kind {
     HSV293S,
@@ -209,6 +227,30 @@ impl Kind {
             Self::SFSTC | Self::STREONOR_S15 => 3,
             _ => 1,
         }
+    }
+
+    /// Numero de teclas fisicas del aparato.
+    ///
+    /// El plugin original declaraba 18 ranuras para TODOS los modelos, lo que
+    /// metia tres teclas muertas (la 6ª columna) en la interfaz de OpenDeck de
+    /// los aparatos de 15 teclas: se podian configurar, pero no existian.
+    /// Los modelos v2/v3 si llevan 6ª columna y siguen con 18 ranuras.
+    pub fn key_count(&self) -> usize {
+        match self {
+            Self::HSV293SV3
+            | Self::HSV293SV3_1005
+            | Self::MSDONE_1005
+            | Self::AKP153E_REV2
+            | Self::AKP153R_REV2
+            | Self::SFSTC
+            | Self::STREONOR_S15 => 18,
+            _ => 15,
+        }
+    }
+
+    /// Numero de columnas reales del aparato.
+    pub fn col_count(&self) -> usize {
+        self.key_count() / ROW_COUNT
     }
 
     /// There is no point relying on manufacturer/device names reported by the USB stack,

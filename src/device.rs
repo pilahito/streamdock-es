@@ -8,16 +8,13 @@ use tokio_util::sync::CancellationToken;
 
 use crate::{
     DEVICES, FLUSH_NOTIFY, TOKENS,
-    inputs::opendeck_to_device,
-    mappings::{
-        COL_COUNT, CandidateDevice, ENCODER_COUNT, KEY_COUNT, Kind, ROW_COUNT,
-        get_image_format_for_key,
-    },
+    inputs::{opendeck_to_device, set_active_key_count},
+    mappings::{CandidateDevice, ENCODER_COUNT, Kind, ROW_COUNT, get_image_format_for_key},
 };
 
 /// Initializes a device and listens for events
 pub async fn device_task(candidate: CandidateDevice, token: CancellationToken) {
-    log::info!("Running device task for {:?}", candidate);
+    log::info!("Ejecutando tarea del dispositivo {:?}", candidate);
 
     // Wrap in a closure so we can use `?` operator
     let device = async || -> Result<Device, MirajazzError> {
@@ -37,7 +34,7 @@ pub async fn device_task(candidate: CandidateDevice, token: CancellationToken) {
             handle_error(&candidate.id, err).await;
 
             log::error!(
-                "Had error during device init, finishing device task: {:?}",
+                "Error al inicializar el dispositivo, se termina la tarea: {:?}",
                 candidate
             );
 
@@ -45,14 +42,14 @@ pub async fn device_task(candidate: CandidateDevice, token: CancellationToken) {
         }
     };
 
-    log::info!("Registering device {}", candidate.id);
+    log::info!("Registrando dispositivo {}", candidate.id);
     if let Some(outbound) = OUTBOUND_EVENT_MANAGER.lock().await.as_mut() {
         outbound
             .register_device(
                 candidate.id.clone(),
                 candidate.kind.human_name(),
                 ROW_COUNT as u8,
-                COL_COUNT as u8,
+                candidate.kind.col_count() as u8,
                 ENCODER_COUNT as u8,
                 0,
             )
@@ -76,38 +73,38 @@ pub async fn device_task(candidate: CandidateDevice, token: CancellationToken) {
 
     FLUSH_NOTIFY.write().await.remove(&candidate.id);
 
-    log::info!("Shutting down device {:?}", candidate);
+    log::info!("Apagando device {:?}", candidate);
 
     if let Some(device) = DEVICES.read().await.get(&candidate.id) {
         device.shutdown().await.ok();
     }
 
-    log::info!("Device task finished for {:?}", candidate);
+    log::info!("Tarea del dispositivo terminada: {:?}", candidate);
 }
 
 /// Handles errors, returning true if should continue, returning false if an error is fatal
 pub async fn handle_error(id: &String, err: MirajazzError) -> bool {
-    log::error!("Device {} error: {}", id, err);
+    log::error!("Error en el dispositivo {}: {}", id, err);
 
     // Some errors are not critical and can be ignored without sending disconnected event
     if matches!(err, MirajazzError::ImageError(_) | MirajazzError::BadData) {
         return true;
     }
 
-    log::info!("Deregistering device {}", id);
+    log::info!("Desregistrando el dispositivo {}", id);
     if let Some(outbound) = OUTBOUND_EVENT_MANAGER.lock().await.as_mut() {
         outbound.deregister_device(id.clone()).await.unwrap();
     }
 
-    log::info!("Cancelling tasks for device {}", id);
+    log::info!("Cancelando tareas del dispositivo {}", id);
     if let Some(token) = TOKENS.read().await.get(id) {
         token.cancel();
     }
 
-    log::info!("Removing device {} from the list", id);
+    log::info!("Quitando el dispositivo {} de la lista", id);
     DEVICES.write().await.remove(id);
 
-    log::info!("Finished clean-up for {}", id);
+    log::info!("Limpieza terminada para {}", id);
 
     false
 }
@@ -116,7 +113,7 @@ pub async fn connect(candidate: &CandidateDevice) -> Result<Device, MirajazzErro
     let result = Device::connect(
         &candidate.dev,
         candidate.kind.protocol_version(),
-        KEY_COUNT,
+        candidate.kind.key_count(),
         ENCODER_COUNT,
     )
     .await;
@@ -124,7 +121,7 @@ pub async fn connect(candidate: &CandidateDevice) -> Result<Device, MirajazzErro
     match result {
         Ok(device) => Ok(device),
         Err(e) => {
-            log::error!("Error while connecting to device: {e}");
+            log::error!("Error al conectar con el dispositivo: {e}");
 
             Err(e)
         }
@@ -152,7 +149,7 @@ async fn device_flush_task(id: &String, notify: Arc<Notify>, token: Cancellation
         let flush_result = {
             let guard = DEVICES.read().await;
             if let Some(device) = guard.get(id) {
-                log::info!("Flushing pending updates");
+                log::info!("Volcando los cambios pendientes");
                 device.flush().await
             } else {
                 Ok(())
@@ -167,7 +164,11 @@ async fn device_flush_task(id: &String, notify: Arc<Notify>, token: Cancellation
 
 /// Handles events from device to OpenDeck
 async fn device_events_task(candidate: &CandidateDevice) -> Result<(), MirajazzError> {
-    log::info!("Connecting to {} for incoming events", candidate.id);
+    log::info!("Conectando con {} para recibir eventos", candidate.id);
+
+    // La lectura de teclas no recibe contexto, asi que fijamos aqui la
+    // disposicion del aparato antes de crear el lector.
+    set_active_key_count(candidate.kind.key_count());
 
     let devices_lock = DEVICES.read().await;
     let reader = match devices_lock.get(&candidate.id) {
@@ -176,12 +177,12 @@ async fn device_events_task(candidate: &CandidateDevice) -> Result<(), MirajazzE
     };
     drop(devices_lock);
 
-    log::info!("Connected to {} for incoming events", candidate.id);
+    log::info!("Conectado a {} para recibir eventos", candidate.id);
 
-    log::info!("Reader is ready for {}", candidate.id);
+    log::info!("Lector preparado para {}", candidate.id);
 
     loop {
-        log::info!("Reading updates...");
+        log::info!("Leyendo actualizaciones...");
 
         let updates = match reader.read(None).await {
             Ok(updates) => updates,
@@ -195,7 +196,7 @@ async fn device_events_task(candidate: &CandidateDevice) -> Result<(), MirajazzE
         };
 
         for update in updates {
-            log::info!("New update: {:#?}", update);
+            log::info!("Nueva actualizacion: {:#?}", update);
 
             let id = candidate.id.clone();
 
@@ -231,7 +232,7 @@ pub async fn handle_set_image(
 ) -> Result<(), MirajazzError> {
     match (evt.position, evt.image) {
         (Some(position), Some(image)) => {
-            log::info!("Setting image for button {}", position);
+            log::info!("Poniendo imagen en la tecla {}", position);
 
             // OpenDeck sends image as a data url, so parse it using a library
             let url = DataUrl::process(image.as_str()).unwrap(); // Isn't expected to fail, so unwrap it is
@@ -239,7 +240,7 @@ pub async fn handle_set_image(
 
             // Allow only image/jpeg mime for now
             if url.mime_type().subtype != "jpeg" {
-                log::error!("Incorrect mime type: {}", url.mime_type());
+                log::error!("Tipo MIME incorrecto: {}", url.mime_type());
 
                 return Ok(()); // Not a fatal error, enough to just log it
             }
