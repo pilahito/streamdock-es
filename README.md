@@ -8,6 +8,11 @@ no oficial de OpenDeck para los stream decks de la familia Mirabox HSV293S.
 
 > Read this in [English](README.en.md).
 
+![OpenDeck mostrando el Mirabox HSV293S con una rejilla de 3x5, 15 teclas](docs/opendeck-15-teclas.png)
+
+*OpenDeck con este plugin: el aparato aparece como «Mirabox HSV293S» y con **15
+teclas**, no 18. Antes salían 18 y tres de ellas no existían.*
+
 ---
 
 ## Qué cambia respecto al original
@@ -37,6 +42,13 @@ Ahora el número de teclas es **por modelo** (`Kind::key_count()`), así que:
 
 README, descripción y nombres del plugin en `manifest.json`, mensajes de log y
 esta documentación.
+
+> **Ojo con la interfaz de OpenDeck:** el desplegable *Language* ofrece «Español»,
+> pero OpenDeck todavía **no trae `translations/es.json`**, así que su interfaz sigue
+> saliendo en inglés (`Settings`, `Plugins`, `Search actions`…). Lo único que hace ese
+> ajuste hoy es decirle a los plugins qué idioma prefiere el usuario: los
+> property inspectors y las acciones sí pueden responder en español.
+> Se explica más abajo, en «La interfaz de OpenDeck, en inglés».
 
 ### 3. Instaladores de verdad
 
@@ -166,6 +178,25 @@ Para montar el paquete `.plugin.zip` como en los releases:
 ```bash
 ./empaquetar.sh 0.12.0
 ```
+
+---
+
+## La interfaz de OpenDeck, en inglés
+
+OpenDeck sí tiene i18n: `src/lib/i18n.ts` carga las traducciones con
+`import.meta.glob("../../translations/*.json")`, y hay `de`, `en`, `ko`, `pt_BR`,
+`sv` y `uk`. Lo que **no** hay es `es.json`, así que al elegir «Español» en los
+ajustes la interfaz cae al `FALLBACK_LOCALE` (inglés).
+
+Ese ajuste, hoy, solo sirve para decirle a los plugins el idioma del usuario: el
+plugin recibe `"language": "es"` en el `info` de arranque y puede responder en
+español en sus property inspectors y sus acciones. La interfaz de OpenDeck no.
+
+Para tenerlo entero en español hay que traducir `translations/en.json` (~10 KB,
+unas 250 cadenas) a `translations/es.json` y proponerlo en
+[nekename/OpenDeck](https://github.com/nekename/OpenDeck). No hace falta tocar
+código: con dejar el fichero en `translations/`, el glob lo recoge y el desplegable
+de idioma lo usa.
 
 ---
 
