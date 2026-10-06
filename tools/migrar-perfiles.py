@@ -100,20 +100,24 @@ def migrar_imagenes(carpeta: Path, simular: bool) -> list[str]:
     if not cambios or simular:
         return [f"Keypad.{v}.0 -> Keypad.{n}.0" for v, n in cambios]
 
-    # A un nombre temporal primero, para no pisarnos al renombrar
-    for viejo, nuevo in cambios:
-        origen = carpeta / f"Keypad.{viejo}.0"
-        if (carpeta / f"Keypad.{nuevo}.0").exists():
-            shutil.rmtree(carpeta / f"Keypad.{nuevo}.0")
-        origen.rename(carpeta / f".tmp_{nuevo}")
-    for _, nuevo in cambios:
-        (carpeta / f".tmp_{nuevo}").rename(carpeta / f"Keypad.{nuevo}.0")
-
-    # Las fantasma ya no pintan nada
-    for viejo in (5, 11, 17):
+    # 1) Fuera las ranuras fantasma ANTES de renombrar. Tiene que ser antes y no
+    #    despues: los indices nuevos 5 y 11 coinciden con dos de las fantasma, y
+    #    si se borran al final se lleva por delante las imagenes recien movidas.
+    for viejo in RANURAS_FANTASMA:
         sobrante = carpeta / f"Keypad.{viejo}.0"
         if sobrante.is_dir():
             shutil.rmtree(sobrante)
+
+    # 2) A un nombre temporal, para no pisarnos al renombrar
+    for viejo, nuevo in cambios:
+        origen = carpeta / f"Keypad.{viejo}.0"
+        if not origen.is_dir():
+            continue
+        origen.rename(carpeta / f".tmp_{nuevo}")
+    for _, nuevo in cambios:
+        temporal = carpeta / f".tmp_{nuevo}"
+        if temporal.is_dir():
+            temporal.rename(carpeta / f"Keypad.{nuevo}.0")
 
     return [f"Keypad.{v}.0 -> Keypad.{n}.0" for v, n in cambios]
 
