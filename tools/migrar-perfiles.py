@@ -30,6 +30,10 @@ from pathlib import Path
 RANURAS_NUEVAS = 15
 RANURAS_VIEJAS = 18
 
+# Ranuras de la 6ª columna del plugin antiguo: existian en la interfaz pero no en
+# el aparato. Ojo: los indices nuevos 5 y 11 coinciden con dos de ellas.
+RANURAS_FANTASMA = (5, 11, 17)
+
 
 def nuevo_a_viejo(nuevo: int) -> int:
     """Indice de la rejilla nueva -> indice equivalente en la vieja."""
@@ -57,7 +61,7 @@ def migrar_perfil(ruta: Path, simular: bool) -> str:
     ocupadas_viejas = [i for i, k in enumerate(claves) if k is not None]
 
     # ¿Se pierde algo en las ranuras fantasma?
-    perdidas = [i for i in (5, 11, 17) if claves[i] is not None]
+    perdidas = [i for i in RANURAS_FANTASMA if claves[i] is not None]
 
     nuevas = []
     for i in range(RANURAS_NUEVAS):
@@ -144,6 +148,7 @@ def main() -> int:
         print("MODO SIMULACION — no se toca nada\n")
 
     tocados = 0
+    fallos = 0
     for dispositivo in sorted(p for p in perfiles.iterdir() if p.is_dir()):
         ficheros = sorted(dispositivo.glob("*.json"))
         if not ficheros:
@@ -151,16 +156,26 @@ def main() -> int:
 
         print(f"Dispositivo {dispositivo.name}")
         for ruta in ficheros:
-            resultado = migrar_perfil(ruta, args.simular)
+            try:
+                resultado = migrar_perfil(ruta, args.simular)
+            except Exception as exc:  # noqa: BLE001
+                print(f"  {ruta.stem:<24} ERROR: {exc}")
+                fallos += 1
+                continue
+
             print(f"  {ruta.stem:<24} {resultado}")
             if resultado.startswith("ya tiene") or resultado.startswith("sin campo") \
-                    or "se deja igual" in resultado:
+                    or "se deja igual" in resultado or resultado.startswith("vacio"):
                 continue
             tocados += 1
 
             carpeta_imgs = imagenes / dispositivo.name / ruta.stem
-            for linea in migrar_imagenes(carpeta_imgs, args.simular):
-                print(f"      imagen {linea}")
+            try:
+                for linea in migrar_imagenes(carpeta_imgs, args.simular):
+                    print(f"      imagen {linea}")
+            except Exception as exc:  # noqa: BLE001
+                print(f"      ERROR moviendo imagenes: {exc}")
+                fallos += 1
         print()
 
     if args.simular:
@@ -168,6 +183,10 @@ def main() -> int:
     else:
         print(f"{tocados} perfil(es) migrados. Se guardo un .bak de cada uno.")
         print("Reinicia OpenDeck para que lo vea.")
+
+    if fallos:
+        print(f"\n{fallos} perfil(es) dieron error; revisa la salida de arriba.", file=sys.stderr)
+        return 1
 
     return 0
 
