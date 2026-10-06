@@ -2,6 +2,24 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.12.0] - 2026-10-06
+
+### Fork en español
+
+- **Arreglado**: los aparatos de 15 teclas (AKP153, HSV293S y clones) ya no
+  declaran 18 ranuras. Ahora el número de teclas depende del modelo
+  (`Kind::key_count()`), así que se registran como 3×5 y desaparecen de la
+  interfaz de OpenDeck las tres teclas fantasma (5, 11 y 17) que se podían
+  configurar pero no existían.
+- Traducidos al español el README, el manifiesto del plugin y los mensajes de log.
+- Añadidos `install-linux.sh`, `install-windows.ps1`, `empaquetar.sh` y
+  `tools/migrar-perfiles.py` (pasa perfiles de 18 a 15 ranuras).
+- Integración continua: se compila para Linux y Windows en cada push y las
+  etiquetas publican `opendeck-akp153.plugin.zip` en Releases.
+- `cargo clippy -D warnings` y `cargo fmt --check` limpios en ambos objetivos.
+- Comprobación en tiempo de compilación de que las tablas de traducción de teclas
+  cuadran con los tamaños declarados.
+
 ## [0.11.1] - 2026-08-10
 
 ### 🚀 Features

@@ -44,7 +44,7 @@ fn device_info_to_candidate(dev: HidDeviceInfo) -> Option<CandidateDevice> {
 
 /// Returns devices that matches known pid/vid pairs
 async fn get_candidates() -> Result<Vec<CandidateDevice>, MirajazzError> {
-    log::info!("Looking for candidate devices");
+    log::info!("Buscando dispositivos compatibles");
 
     let mut candidates: Vec<CandidateDevice> = Vec::new();
 
@@ -65,10 +65,10 @@ pub async fn watcher_task(token: CancellationToken) -> Result<(), MirajazzError>
     // Scans for connected devices that (possibly) we can use
     let candidates = get_candidates().await?;
 
-    log::info!("Looking for connected devices");
+    log::info!("Buscando dispositivos conectados");
 
     for candidate in candidates {
-        log::info!("New candidate {:#?}", candidate);
+        log::info!("Nuevo candidato {:#?}", candidate);
 
         let token = CancellationToken::new();
 
@@ -83,7 +83,7 @@ pub async fn watcher_task(token: CancellationToken) -> Result<(), MirajazzError>
     let mut watcher = DeviceWatcher::new();
     let mut watcher_stream = watcher.watch(&QUERIES).await?;
 
-    log::info!("Watcher is ready");
+    log::info!("Vigilante listo");
 
     loop {
         let ev = tokio::select! {
@@ -92,7 +92,7 @@ pub async fn watcher_task(token: CancellationToken) -> Result<(), MirajazzError>
         };
 
         if let Some(ev) = ev {
-            log::info!("New device event: {:?}", ev);
+            log::info!("Nuevo evento de dispositivo: {:?}", ev);
 
             match ev {
                 DeviceLifecycleEvent::Connected(info) => {
@@ -109,9 +109,9 @@ pub async fn watcher_task(token: CancellationToken) -> Result<(), MirajazzError>
                             .await
                             .insert(candidate.id.clone(), token.clone());
 
-                        log::debug!("Spawning task for new device: {:?}", candidate);
+                        log::debug!("Lanzando tarea para el dispositivo nuevo: {:?}", candidate);
                         tracker.spawn(device_task(candidate, token));
-                        log::debug!("Spawned");
+                        log::debug!("Lanzada");
                     }
                 }
                 DeviceLifecycleEvent::Disconnected(info) => {
@@ -119,7 +119,7 @@ pub async fn watcher_task(token: CancellationToken) -> Result<(), MirajazzError>
                         .expect("Unable to get device id, check mappings in Kind::from_vid_pid");
 
                     if let Some(token) = TOKENS.write().await.remove(&id) {
-                        log::info!("Sending cancel request for {}", id);
+                        log::info!("Enviando peticion de cancelacion para {}", id);
                         token.cancel();
                     }
 
@@ -129,11 +129,11 @@ pub async fn watcher_task(token: CancellationToken) -> Result<(), MirajazzError>
                         outbound.deregister_device(id.clone()).await.ok();
                     }
 
-                    log::info!("Disconnected device {}", id);
+                    log::info!("Dispositivo {} desconectado", id);
                 }
             }
         } else {
-            log::info!("Watcher is shutting down");
+            log::info!("El vigilante se esta apagando");
 
             break Ok(());
         }

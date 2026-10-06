@@ -1,8 +1,8 @@
 {
-  "Name": "Ajazz AKP153 / Mirabox HSV293S",
-  "Description": "Device support plugin for Ajazz AKP153 (+variants)",
-  "Author": "Andrey Viktorov",
-  "Version": "0.11.1",
+  "Name": "StreamDock ES — Ajazz AKP153 / Mirabox HSV293S",
+  "Description": "Soporte para stream decks Ajazz AKP153 y Mirabox HSV293S (y variantes), con el numero de teclas correcto para cada modelo. Version en espanol con Linux y Windows cuidados.",
+  "Author": "Andrey Viktorov; fork en espanol por pilahito",
+  "Version": "0.12.0",
   "PluginUUID": "st.lynx.plugins.opendeck-akp153",
   "CodePathLin": "opendeck-akp153-linux",
   "CodePathMac": "opendeck-akp153-mac",

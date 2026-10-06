@@ -1,19 +1,26 @@
-# Generative "AI" / LLM policy
+# Política sobre IA
 
-## Code
+## Código
 
-You can use LLM coding assistants to help you write code. We would strongly prefer if you wouldn't, but we will not judge for it
+Se puede usar asistencia de LLM para escribir código. De hecho, este fork se ha
+desarrollado así y no lo escondemos.
 
-You still need to have a complete understanding of what this code does; it must be reviewed by you before submitting, and you must be able to answer the questions about the specifics of it
+Lo que sí se exige:
 
-All the usage of LLMs must be disclosed
+- quien envía el cambio tiene que entender lo que hace y poder defenderlo;
+- tiene que pasar `cargo fmt`, `cargo clippy -D warnings` y compilar en Linux y
+  Windows;
+- conviene decirlo en la descripción del cambio.
 
-## Communications
+## Comunicación
 
-Any kind of LLM usage in any communication in relation to the project, including but not limited to pull request descriptions, issues, or comments, is strictly prohibited
+Los textos del proyecto (documentación, comentarios, mensajes de log, issues)
+están escritos por personas o por agentes, pero **siempre revisados**. No se
+acepta texto generado sin revisar: si algo está mal explicado, es culpa de quien
+lo firma.
 
-If violated, you will be mocked for it by the means of a picture with a laughing cat pointing a finger at you
+## Herramientas automáticas
 
-## Unsupervised tools (i.e. "openclaws")
-
-GTFO; not welcome in here
+Los agentes son bienvenidos si trabajan con las mismas reglas que cualquiera:
+cambios pequeños, revisables, con el CI en verde y sin tocar la configuración
+del usuario sin permiso.
