@@ -1,0 +1,183 @@
+name: Compilar y publicar
+
+# Compila el plugin para Linux y Windows y, si es una etiqueta, publica el
+# .plugin.zip en Releases. Tambien comprueba el estilo y pasa clippy.
+#
+# El README original decia "Windows: Zero effort". Aqui Windows se compila igual
+# que Linux en cada push, asi que un fallo se ve antes de publicar.
+
+on:
+  push:
+    branches: [main]
+    tags: ['v*']
+  pull_request:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+env:
+  CARGO_TERM_COLOR: always
+  PLUGIN_ID: st.lynx.plugins.opendeck-akp153.sdPlugin
+
+jobs:
+  # ── 1. estilo y avisos ────────────────────────────────────────────────────
+  revision:
+    name: Revisión (fmt + clippy)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Dependencias del sistema
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y libudev-dev pkg-config
+
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          components: rustfmt, clippy
+
+      - uses: Swatinem/rust-cache@v2
+
+      - name: Formato
+        run: cargo fmt --all -- --check
+
+      - name: Clippy (los avisos son errores)
+        run: cargo clippy --all-targets -- -D warnings
+
+  # ── 2. compilar en cada plataforma ────────────────────────────────────────
+  compilar:
+    name: Compilar (${{ matrix.nombre }})
+    runs-on: ${{ matrix.so }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - nombre: Linux x86_64
+            so: ubuntu-latest
+            target: x86_64-unknown-linux-gnu
+            artefacto: opendeck-akp153-linux
+          - nombre: Windows x86_64
+            so: ubuntu-latest
+            target: x86_64-pc-windows-gnu
+            artefacto: opendeck-akp153-win.exe
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Dependencias del sistema
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y libudev-dev pkg-config
+
+      - name: MinGW para Windows
+        if: matrix.target == 'x86_64-pc-windows-gnu'
+        run: sudo apt-get install -y mingw-w64
+
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: ${{ matrix.target }}
+
+      - uses: Swatinem/rust-cache@v2
+        with:
+          key: ${{ matrix.target }}
+
+      - name: Compilar
+        run: cargo build --release --locked --target ${{ matrix.target }}
+
+      - name: Comprobar que el binario es del tipo correcto
+        run: |
+          BIN="target/${{ matrix.target }}/release/opendeck-akp153"
+          [ "${{ matrix.target }}" = "x86_64-pc-windows-gnu" ] && BIN="$BIN.exe"
+          test -f "$BIN" || { echo "No se genero $BIN"; exit 1; }
+          file "$BIN"
+
+      - name: Guardar el binario
+        uses: actions/upload-artifact@v4
+        with:
+          name: binario-${{ matrix.target }}
+          path: target/${{ matrix.target }}/release/opendeck-akp153*
+
+  # ── 3. montar el paquete ──────────────────────────────────────────────────
+  paquete:
+    name: Paquete .plugin.zip
+    needs: [revision, compilar]
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/download-artifact@v4
+        with:
+          path: binarios
+
+      - name: Montar la carpeta del plugin
+        run: |
+          mkdir -p "build/$PLUGIN_ID"
+          cp -r assets "build/$PLUGIN_ID/"
+          cp manifest.json "build/$PLUGIN_ID/"
+
+          cp binarios/binario-x86_64-unknown-linux-gnu/opendeck-akp153 \
+             "build/$PLUGIN_ID/opendeck-akp153-linux"
+          cp binarios/binario-x86_64-pc-windows-gnu/opendeck-akp153.exe \
+             "build/$PLUGIN_ID/opendeck-akp153-win.exe"
+          chmod +x "build/$PLUGIN_ID/opendeck-akp153-linux"
+
+          # macOS no se compila aqui (necesita el SDK de Apple), pero el
+          # manifiesto lo menciona y OpenDeck lo ignora en Linux y Windows.
+          echo "Contenido del paquete:"
+          find "build/$PLUGIN_ID" -type f | sort
+
+      - name: Comprobar el paquete
+        run: |
+          cd build
+          test -f "$PLUGIN_ID/manifest.json"
+          test -f "$PLUGIN_ID/opendeck-akp153-linux"
+          test -f "$PLUGIN_ID/opendeck-akp153-win.exe"
+          file "$PLUGIN_ID/opendeck-akp153-win.exe" | grep -qi 'PE32' \
+            || { echo "El .exe no parece un binario de Windows"; exit 1; }
+
+      - name: Comprimir
+        run: |
+          cd build
+          zip -qr opendeck-akp153.plugin.zip "$PLUGIN_ID"
+          unzip -l opendeck-akp153.plugin.zip
+
+      - name: Guardar el paquete
+        uses: actions/upload-artifact@v4
+        with:
+          name: plugin-zip
+          path: build/opendeck-akp153.plugin.zip
+
+      - name: Publicar en Releases
+        if: startsWith(github.ref, 'refs/tags/v')
+        uses: softprops/action-gh-release@v2
+        with:
+          files: |
+            build/opendeck-akp153.plugin.zip
+            40-opendeck-akp153.rules
+          generate_release_notes: true
+          body: |
+            ## StreamDock ES ${{ github.ref_name }}
+
+            Paquete listo para OpenDeck: **`opendeck-akp153.plugin.zip`**
+
+            ### Linux
+
+            ```bash
+            git clone https://github.com/${{ github.repository }}.git
+            cd streamdock-es && ./install-linux.sh
+            ```
+
+            ### Windows 10/11
+
+            ```powershell
+            powershell -ExecutionPolicy Bypass -File .\install-windows.ps1 -Version ${{ github.ref_name }}
+            ```
+
+            ### Cambios importantes de esta version
+
+            - Los aparatos de 15 teclas (AKP153, HSV293S y clones) ya no muestran
+              tres teclas fantasma: se registran como 3×5 en vez de 3×6.
+            - Si venias de la version antigua, migra tus perfiles con
+              `python3 tools/migrar-perfiles.py`.
